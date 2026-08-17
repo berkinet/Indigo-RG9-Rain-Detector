@@ -156,7 +156,7 @@ class PluginTests(unittest.TestCase):
 
         indigo.variable.updateValue.assert_called_with(1208422529, value="0")
 
-    def test_active_rain_keeps_days_variable_zero_at_midnight(self):
+    def test_day_with_rain_does_not_increment_at_midnight(self):
         variable = SimpleNamespace(id=1208422529, value="0")
         indigo.variables[1208422529] = variable
         indigo.variable.updateValue.reset_mock()
@@ -165,6 +165,7 @@ class PluginTests(unittest.TestCase):
         state.detection(start)
         state.detection(start.replace(second=40))
         self.plugin._days_counter_day[1] = start.date()
+        self.plugin._last_rain_detected[1] = start.replace(second=40)
 
         self.plugin._update_days_since_last_rain(
             1, plugin_module.datetime(2026, 8, 17, 0, 0, 10)
@@ -174,6 +175,25 @@ class PluginTests(unittest.TestCase):
         self.assertEqual(
             self.plugin._days_counter_day[1],
             plugin_module.datetime(2026, 8, 17).date(),
+        )
+
+    def test_only_full_rain_free_day_increments_counter(self):
+        variable = SimpleNamespace(id=1208422529, value="0")
+        indigo.variables[1208422529] = variable
+        indigo.variable.updateValue.reset_mock()
+        self.plugin._days_counter_day[1] = plugin_module.datetime(
+            2026, 8, 16
+        ).date()
+        self.plugin._last_rain_detected[1] = plugin_module.datetime(
+            2026, 8, 16, 12, 0
+        )
+
+        self.plugin._update_days_since_last_rain(
+            1, plugin_module.datetime(2026, 8, 18, 0, 0, 1)
+        )
+
+        indigo.variable.updateValue.assert_called_once_with(
+            1208422529, value="1"
         )
 
     def test_last_rain_ended_uses_final_detection_time(self):

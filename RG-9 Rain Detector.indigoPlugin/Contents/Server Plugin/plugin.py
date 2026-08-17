@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import indigo
 
@@ -95,13 +95,16 @@ class Plugin(indigo.PluginBase):
                 dev = self._devices.get(device_id)
                 if dev is None or self._source_id(dev) != new_dev.id:
                     continue
+                was_raining = state.is_raining
                 confirmed = state.detection(now)
-                if confirmed:
+                rain_detection = confirmed or was_raining
+                if rain_detection:
                     self._last_rain_detected[device_id] = now
+                if confirmed:
                     self.logger.info("Rain confirmed for %s", dev.name)
                 self._publish(dev, state, now, force=True)
                 self._update_days_since_last_rain(
-                    device_id, now, reset=confirmed
+                    device_id, now, reset=rain_detection
                 )
 
     def validateDeviceConfigUi(self, values_dict, type_id, dev_id):
@@ -230,16 +233,20 @@ class Plugin(indigo.PluginBase):
             self._days_counter_day[device_id] = today
             return
         elapsed_days = (today - counter_day).days
-        state = self._states.get(device_id)
         if elapsed_days <= 0:
             return
         try:
             current_value = int(str(variable.value))
         except (TypeError, ValueError):
             current_value = 0
-        new_value = 0 if state is not None and state.is_raining else (
-            max(0, current_value) + elapsed_days
+        rain_day = self._last_rain_detected.get(device_id)
+        rain_date = rain_day.date() if rain_day is not None else None
+        rain_free_days = sum(
+            1
+            for offset in range(elapsed_days)
+            if (counter_day + timedelta(days=offset)) != rain_date
         )
+        new_value = max(0, current_value) + rain_free_days
         if str(variable.value) != str(new_value):
             indigo.variable.updateValue(variable.id, value=str(new_value))
         self._days_counter_day[device_id] = today

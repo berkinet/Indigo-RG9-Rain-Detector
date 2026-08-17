@@ -21,9 +21,9 @@ detection.
 - `lastRainEnded` records the final drop time for the most recently completed
   confirmed event.
 - Indigo variable `daysSinceLastRain` (ID `1208422529`) resets to `0` when rain
-  is confirmed. At each local midnight it increments by one if the detector is
-  dry, and remains `0` if rain is still active. Missed midnights while the
-  plugin is stopped are applied when it starts again.
+  is confirmed. At each local midnight it increments by one only if the entire
+  completed calendar day had no confirmed rain detections. Missed rain-free
+  days while the plugin is stopped are applied when it starts again.
 
 Defaults:
 
