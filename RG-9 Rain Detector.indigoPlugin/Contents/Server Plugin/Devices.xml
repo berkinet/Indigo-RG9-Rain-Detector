@@ -75,6 +75,11 @@
                 <TriggerLabel>Last confirmed rain timestamp</TriggerLabel>
                 <ControlPageLabel>Last confirmed rain timestamp</ControlPageLabel>
             </State>
+            <State id="daysCounterDay" readonly="true" hidden="true">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Days counter update date</TriggerLabel>
+                <ControlPageLabel>Days counter update date</ControlPageLabel>
+            </State>
         </States>
     </Device>
 </Devices>

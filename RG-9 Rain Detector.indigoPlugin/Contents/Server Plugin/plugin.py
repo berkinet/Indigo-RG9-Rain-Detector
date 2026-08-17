@@ -22,6 +22,7 @@ class Plugin(indigo.PluginBase):
         self._devices = {}
         self._last_rain_ended = {}
         self._last_rain_detected = {}
+        self._days_counter_day = {}
         self._missing_variable_logged = False
 
     def startup(self):
@@ -63,6 +64,9 @@ class Plugin(indigo.PluginBase):
             self._last_rain_detected[dev.id] = self._datetime_state(
                 dev, "lastRainDetected"
             )
+            self._days_counter_day[dev.id] = self._date_state(
+                dev, "daysCounterDay"
+            )
             if state.advance(datetime.now()):
                 self._last_rain_ended[dev.id] = state.last_detection
             self._publish(dev, state, datetime.now(), force=True)
@@ -74,6 +78,7 @@ class Plugin(indigo.PluginBase):
             self._devices.pop(dev.id, None)
             self._last_rain_ended.pop(dev.id, None)
             self._last_rain_detected.pop(dev.id, None)
+            self._days_counter_day.pop(dev.id, None)
         super().deviceStopComm(dev)
 
     def deviceUpdated(self, original_dev, new_dev):
@@ -95,7 +100,9 @@ class Plugin(indigo.PluginBase):
                     self._last_rain_detected[device_id] = now
                     self.logger.info("Rain confirmed for %s", dev.name)
                 self._publish(dev, state, now, force=True)
-                self._update_days_since_last_rain(device_id, now)
+                self._update_days_since_last_rain(
+                    device_id, now, reset=confirmed
+                )
 
     def validateDeviceConfigUi(self, values_dict, type_id, dev_id):
         errors = indigo.Dict()
@@ -189,6 +196,9 @@ class Plugin(indigo.PluginBase):
             "lastRainDetected": self._format_datetime(
                 self._last_rain_detected.get(dev.id)
             ),
+            "daysCounterDay": self._format_date(
+                self._days_counter_day.get(dev.id)
+            ),
         }
         updates = []
         for key, value in values.items():
@@ -197,11 +207,7 @@ class Plugin(indigo.PluginBase):
         if updates:
             dev.updateStatesOnServer(updates)
 
-    def _update_days_since_last_rain(self, device_id, now):
-        last_rain = self._last_rain_detected.get(device_id)
-        if last_rain is None:
-            return
-        days = max(0, (now.date() - last_rain.date()).days)
+    def _update_days_since_last_rain(self, device_id, now, reset=False):
         try:
             variable = indigo.variables[DAYS_SINCE_LAST_RAIN_VARIABLE_ID]
         except (IndexError, KeyError, TypeError):
@@ -213,8 +219,30 @@ class Plugin(indigo.PluginBase):
                 self._missing_variable_logged = True
             return
         self._missing_variable_logged = False
-        if str(variable.value) != str(days):
-            indigo.variable.updateValue(variable.id, value=str(days))
+        today = now.date()
+        if reset:
+            if str(variable.value) != "0":
+                indigo.variable.updateValue(variable.id, value="0")
+            self._days_counter_day[device_id] = today
+            return
+        counter_day = self._days_counter_day.get(device_id)
+        if counter_day is None:
+            self._days_counter_day[device_id] = today
+            return
+        elapsed_days = (today - counter_day).days
+        state = self._states.get(device_id)
+        if elapsed_days <= 0:
+            return
+        try:
+            current_value = int(str(variable.value))
+        except (TypeError, ValueError):
+            current_value = 0
+        new_value = 0 if state is not None and state.is_raining else (
+            max(0, current_value) + elapsed_days
+        )
+        if str(variable.value) != str(new_value):
+            indigo.variable.updateValue(variable.id, value=str(new_value))
+        self._days_counter_day[device_id] = today
 
     def _source_ids(self):
         return {self._source_id(dev) for dev in self._devices.values()}
@@ -241,11 +269,25 @@ class Plugin(indigo.PluginBase):
         return value.strftime("%Y-%m-%d %H:%M:%S") if value else ""
 
     @staticmethod
+    def _format_date(value):
+        return value.isoformat() if value else ""
+
+    @staticmethod
     def _datetime_state(dev, key):
         value = str(dev.states.get(key, "")).strip()
         if not value or value == "Never":
             return None
         try:
             return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _date_state(dev, key):
+        value = str(dev.states.get(key, "")).strip()
+        if not value:
+            return None
+        try:
+            return datetime.strptime(value, "%Y-%m-%d").date()
         except ValueError:
             return None
