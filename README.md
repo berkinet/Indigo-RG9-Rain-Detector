@@ -18,6 +18,10 @@ detection.
   to rainfall time.
 - Rainfall time and detection count reset at local midnight. An event spanning
   midnight remains On, while the new day's duration starts from midnight.
+- `lastRainEnded` records the final drop time for the most recently completed
+  confirmed event.
+- Indigo variable `daysSinceLastRain` (ID `1208422529`) resets to `0` when rain
+  is confirmed and then tracks local calendar days since that confirmation.
 
 Defaults:
 
@@ -44,6 +48,7 @@ For the original installation, select **CM-Rain sensor** (device ID
 - `rainfallTodaySeconds`: accumulated rainfall time today
 - `rainfallToday`: the same duration formatted as `HH:MM:SS`
 - `lastDetection`: most recent RG-9 detection
+- `lastRainEnded`: final drop time of the last completed rain event
 - `detectionsToday`: rising edges received today
 - `status`: `Dry`, `Waiting for confirmation`, or `Raining`
 

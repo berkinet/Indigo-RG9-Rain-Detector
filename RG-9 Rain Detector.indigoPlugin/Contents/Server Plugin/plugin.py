@@ -11,6 +11,7 @@ from rain_logic import RainState, format_duration
 
 
 DEVICE_TYPE = "rainDetector"
+DAYS_SINCE_LAST_RAIN_VARIABLE_ID = 1208422529
 
 
 class Plugin(indigo.PluginBase):
@@ -19,6 +20,9 @@ class Plugin(indigo.PluginBase):
         self._lock = threading.RLock()
         self._states = {}
         self._devices = {}
+        self._last_rain_ended = {}
+        self._last_rain_detected = {}
+        self._missing_variable_logged = False
 
     def startup(self):
         indigo.devices.subscribeToChanges()
@@ -37,8 +41,10 @@ class Plugin(indigo.PluginBase):
                         dev = self._devices.get(device_id)
                         if dev is not None:
                             if ended:
+                                self._last_rain_ended[device_id] = state.last_detection
                                 self.logger.info("Rain ended for %s", dev.name)
                             self._publish(dev, state, now)
+                            self._update_days_since_last_rain(device_id, now)
                 self.sleep(1)
         except self.StopThread:
             pass
@@ -51,12 +57,23 @@ class Plugin(indigo.PluginBase):
             state = self._restore_state(dev)
             self._states[dev.id] = state
             self._devices[dev.id] = dev
+            self._last_rain_ended[dev.id] = self._datetime_state(
+                dev, "lastRainEnded"
+            )
+            self._last_rain_detected[dev.id] = self._datetime_state(
+                dev, "lastRainDetected"
+            )
+            if state.advance(datetime.now()):
+                self._last_rain_ended[dev.id] = state.last_detection
             self._publish(dev, state, datetime.now(), force=True)
+            self._update_days_since_last_rain(dev.id, datetime.now())
 
     def deviceStopComm(self, dev):
         with self._lock:
             self._states.pop(dev.id, None)
             self._devices.pop(dev.id, None)
+            self._last_rain_ended.pop(dev.id, None)
+            self._last_rain_detected.pop(dev.id, None)
         super().deviceStopComm(dev)
 
     def deviceUpdated(self, original_dev, new_dev):
@@ -75,8 +92,10 @@ class Plugin(indigo.PluginBase):
                     continue
                 confirmed = state.detection(now)
                 if confirmed:
+                    self._last_rain_detected[device_id] = now
                     self.logger.info("Rain confirmed for %s", dev.name)
                 self._publish(dev, state, now, force=True)
+                self._update_days_since_last_rain(device_id, now)
 
     def validateDeviceConfigUi(self, values_dict, type_id, dev_id):
         errors = indigo.Dict()
@@ -158,12 +177,18 @@ class Plugin(indigo.PluginBase):
             "rainfallTodaySeconds": seconds,
             "rainfallToday": format_duration(seconds),
             "lastDetection": last_detection,
+            "lastRainEnded": self._format_datetime(
+                self._last_rain_ended.get(dev.id)
+            ) or "Never",
             "detectionsToday": state.detections_today,
             "status": status,
             "dayKey": state.day_key,
             "accumulatedSeconds": int(state.accumulated_seconds),
             "candidateAt": self._format_datetime(state.candidate_at),
             "rainingSince": self._format_datetime(state.raining_since),
+            "lastRainDetected": self._format_datetime(
+                self._last_rain_detected.get(dev.id)
+            ),
         }
         updates = []
         for key, value in values.items():
@@ -171,6 +196,25 @@ class Plugin(indigo.PluginBase):
                 updates.append({"key": key, "value": value})
         if updates:
             dev.updateStatesOnServer(updates)
+
+    def _update_days_since_last_rain(self, device_id, now):
+        last_rain = self._last_rain_detected.get(device_id)
+        if last_rain is None:
+            return
+        days = max(0, (now.date() - last_rain.date()).days)
+        try:
+            variable = indigo.variables[DAYS_SINCE_LAST_RAIN_VARIABLE_ID]
+        except (IndexError, KeyError, TypeError):
+            if not self._missing_variable_logged:
+                self.logger.error(
+                    "Indigo variable %s (daysSinceLastRain) was not found",
+                    DAYS_SINCE_LAST_RAIN_VARIABLE_ID,
+                )
+                self._missing_variable_logged = True
+            return
+        self._missing_variable_logged = False
+        if str(variable.value) != str(days):
+            indigo.variable.updateValue(variable.id, value=str(days))
 
     def _source_ids(self):
         return {self._source_id(dev) for dev in self._devices.values()}

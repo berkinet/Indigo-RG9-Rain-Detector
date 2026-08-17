@@ -36,10 +36,16 @@ class Devices(dict):
         return iter(self.values())
 
 
+class Variables(dict):
+    pass
+
+
 indigo = ModuleType("indigo")
 indigo.PluginBase = PluginBase
 indigo.Dict = dict
 indigo.devices = Devices()
+indigo.variables = Variables()
+indigo.variable = SimpleNamespace(updateValue=Mock())
 sys.modules["indigo"] = indigo
 
 spec = importlib.util.spec_from_file_location("rg9_plugin", SERVER / "plugin.py")
@@ -116,6 +122,49 @@ class PluginTests(unittest.TestCase):
         self.assertTrue(state.is_raining)
         self.assertEqual(state.accumulated_seconds, 12)
         self.assertEqual(state.last_detection.minute, 1)
+
+    def test_days_since_last_rain_variable_uses_calendar_days(self):
+        variable = SimpleNamespace(id=1208422529, value="99")
+        indigo.variables[1208422529] = variable
+        indigo.variable.updateValue.reset_mock()
+        self.plugin._last_rain_detected[1] = plugin_module.datetime(
+            2026, 8, 15, 23, 59
+        )
+
+        self.plugin._update_days_since_last_rain(
+            1, plugin_module.datetime(2026, 8, 17, 0, 1)
+        )
+
+        indigo.variable.updateValue.assert_called_once_with(
+            1208422529, value="2"
+        )
+
+    def test_confirmed_rain_resets_days_variable(self):
+        variable = SimpleNamespace(id=1208422529, value="7")
+        indigo.variables[1208422529] = variable
+        indigo.variable.updateValue.reset_mock()
+        source_off = SimpleNamespace(id=924647097, states={"onOffState": False})
+        source_on = SimpleNamespace(id=924647097, states={"onOffState": True})
+
+        self.plugin.deviceUpdated(source_off, source_on)
+        self.plugin.deviceUpdated(source_off, source_on)
+
+        indigo.variable.updateValue.assert_called_with(1208422529, value="0")
+
+    def test_last_rain_ended_uses_final_detection_time(self):
+        state = self.plugin._states[1]
+        start = plugin_module.datetime(2026, 8, 17, 10, 0, 0)
+        state.detection(start)
+        state.detection(start.replace(second=10))
+        state.detection(start.replace(second=30))
+        self.assertTrue(state.advance(start.replace(minute=2)))
+        self.plugin._last_rain_ended[1] = state.last_detection
+
+        self.plugin._publish(self.detector, state, start.replace(minute=2), force=True)
+
+        updates = self.detector.updateStatesOnServer.call_args.args[0]
+        values = {item["key"]: item["value"] for item in updates}
+        self.assertEqual(values["lastRainEnded"], "2026-08-17 10:00:30")
 
 
 if __name__ == "__main__":

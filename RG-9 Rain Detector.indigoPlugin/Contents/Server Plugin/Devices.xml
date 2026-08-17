@@ -35,6 +35,11 @@
                 <TriggerLabel>Last detection</TriggerLabel>
                 <ControlPageLabel>Last detection</ControlPageLabel>
             </State>
+            <State id="lastRainEnded" readonly="true">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Last rain ended</TriggerLabel>
+                <ControlPageLabel>Last rain ended</ControlPageLabel>
+            </State>
             <State id="detectionsToday" readonly="true">
                 <ValueType>Number</ValueType>
                 <TriggerLabel>Detections today</TriggerLabel>
@@ -64,6 +69,11 @@
                 <ValueType>String</ValueType>
                 <TriggerLabel>Rain start timestamp</TriggerLabel>
                 <ControlPageLabel>Rain start timestamp</ControlPageLabel>
+            </State>
+            <State id="lastRainDetected" readonly="true" hidden="true">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Last confirmed rain timestamp</TriggerLabel>
+                <ControlPageLabel>Last confirmed rain timestamp</ControlPageLabel>
             </State>
         </States>
     </Device>
