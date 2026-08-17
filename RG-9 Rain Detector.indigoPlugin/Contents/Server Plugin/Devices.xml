@@ -17,8 +17,8 @@
         <States>
             <State id="onOffState" readonly="true">
                 <ValueType boolType="OnOff">Boolean</ValueType>
-                <TriggerLabel>Raining</TriggerLabel>
-                <ControlPageLabel>Raining</ControlPageLabel>
+                <TriggerLabel>Rain confirmed</TriggerLabel>
+                <ControlPageLabel>Rain confirmed</ControlPageLabel>
             </State>
             <State id="rainfallTodaySeconds" readonly="true">
                 <ValueType>Number</ValueType>
