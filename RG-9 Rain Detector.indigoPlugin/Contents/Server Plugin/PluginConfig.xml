@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<PluginConfig>
+    <Field id="information" type="label">
+        <Label>Detection timing is configured on each RG-9 rain detector device.</Label>
+    </Field>
+</PluginConfig>

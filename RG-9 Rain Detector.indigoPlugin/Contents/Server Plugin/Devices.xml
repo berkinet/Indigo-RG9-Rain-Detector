@@ -1,0 +1,70 @@
+<?xml version="1.0"?>
+<Devices>
+    <Device type="custom" id="rainDetector">
+        <Name>RG-9 rain detector</Name>
+        <ConfigUI>
+            <Field id="sourceDeviceId" type="menu">
+                <Label>Indigo device to monitor:</Label>
+                <List class="self" method="availableSourceDevices" dynamicReload="true"/>
+            </Field>
+            <Field id="confirmationWindowSeconds" type="textfield" defaultValue="60">
+                <Label>Second detection required within (seconds):</Label>
+            </Field>
+            <Field id="dryPeriodSeconds" type="textfield" defaultValue="60">
+                <Label>End rain after no detections for (seconds):</Label>
+            </Field>
+        </ConfigUI>
+        <States>
+            <State id="onOffState" readonly="true">
+                <ValueType boolType="OnOff">Boolean</ValueType>
+                <TriggerLabel>Raining</TriggerLabel>
+                <ControlPageLabel>Raining</ControlPageLabel>
+            </State>
+            <State id="rainfallTodaySeconds" readonly="true">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Rainfall time today (seconds)</TriggerLabel>
+                <ControlPageLabel>Rainfall time today (seconds)</ControlPageLabel>
+            </State>
+            <State id="rainfallToday" readonly="true">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Rainfall time today</TriggerLabel>
+                <ControlPageLabel>Rainfall time today</ControlPageLabel>
+            </State>
+            <State id="lastDetection" readonly="true">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Last detection</TriggerLabel>
+                <ControlPageLabel>Last detection</ControlPageLabel>
+            </State>
+            <State id="detectionsToday" readonly="true">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Detections today</TriggerLabel>
+                <ControlPageLabel>Detections today</ControlPageLabel>
+            </State>
+            <State id="status" readonly="true">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Detector status</TriggerLabel>
+                <ControlPageLabel>Detector status</ControlPageLabel>
+            </State>
+            <State id="dayKey" readonly="true" hidden="true">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Day</TriggerLabel>
+                <ControlPageLabel>Day</ControlPageLabel>
+            </State>
+            <State id="accumulatedSeconds" readonly="true" hidden="true">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Completed rainfall seconds</TriggerLabel>
+                <ControlPageLabel>Completed rainfall seconds</ControlPageLabel>
+            </State>
+            <State id="candidateAt" readonly="true" hidden="true">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Candidate timestamp</TriggerLabel>
+                <ControlPageLabel>Candidate timestamp</ControlPageLabel>
+            </State>
+            <State id="rainingSince" readonly="true" hidden="true">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Rain start timestamp</TriggerLabel>
+                <ControlPageLabel>Rain start timestamp</ControlPageLabel>
+            </State>
+        </States>
+    </Device>
+</Devices>
