@@ -45,6 +45,36 @@ class RainStateTests(unittest.TestCase):
         self.assertFalse(self.state.is_raining)
         self.assertEqual(self.state.total_seconds(self.start + timedelta(seconds=200)), 40)
 
+    def test_sustained_high_confirms_and_counts_until_falling_edge(self):
+        self.assertFalse(self.state.input_changed(True, self.start))
+        self.assertFalse(
+            self.state.confirm_sustained_high(
+                self.start + timedelta(seconds=29)
+            )
+        )
+        self.assertTrue(
+            self.state.confirm_sustained_high(
+                self.start + timedelta(seconds=30)
+            )
+        )
+        self.assertEqual(
+            self.state.total_seconds(self.start + timedelta(seconds=45)), 45
+        )
+        self.state.input_changed(False, self.start + timedelta(seconds=50))
+        self.assertFalse(self.state.advance(self.start + timedelta(seconds=109)))
+        self.assertTrue(self.state.advance(self.start + timedelta(seconds=110)))
+        self.assertEqual(self.state.rain_ended_at, self.start + timedelta(seconds=50))
+        self.assertEqual(self.state.total_seconds(self.start + timedelta(seconds=200)), 50)
+
+    def test_two_pulses_confirm_from_first_rising_edge(self):
+        self.state.input_changed(True, self.start)
+        self.state.input_changed(False, self.start + timedelta(seconds=2))
+        self.assertTrue(
+            self.state.input_changed(True, self.start + timedelta(seconds=20))
+        )
+        self.assertEqual(self.state.detections_today, 2)
+        self.assertEqual(self.state.raining_since, self.start)
+
     def test_daily_total_resets_at_midnight_during_rain(self):
         start = datetime(2026, 8, 17, 23, 59, 30)
         self.state.detection(start)

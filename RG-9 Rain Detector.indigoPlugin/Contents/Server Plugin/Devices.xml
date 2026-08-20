@@ -65,10 +65,30 @@
                 <TriggerLabel>Candidate timestamp</TriggerLabel>
                 <ControlPageLabel>Candidate timestamp</ControlPageLabel>
             </State>
+            <State id="candidateOffAt" readonly="true" hidden="true">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Candidate off timestamp</TriggerLabel>
+                <ControlPageLabel>Candidate off timestamp</ControlPageLabel>
+            </State>
             <State id="rainingSince" readonly="true" hidden="true">
                 <ValueType>String</ValueType>
                 <TriggerLabel>Rain start timestamp</TriggerLabel>
                 <ControlPageLabel>Rain start timestamp</ControlPageLabel>
+            </State>
+            <State id="sourceHigh" readonly="true" hidden="true">
+                <ValueType boolType="OnOff">Boolean</ValueType>
+                <TriggerLabel>Source input high</TriggerLabel>
+                <ControlPageLabel>Source input high</ControlPageLabel>
+            </State>
+            <State id="highSince" readonly="true" hidden="true">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Source high timestamp</TriggerLabel>
+                <ControlPageLabel>Source high timestamp</ControlPageLabel>
+            </State>
+            <State id="lowSince" readonly="true" hidden="true">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Source low timestamp</TriggerLabel>
+                <ControlPageLabel>Source low timestamp</ControlPageLabel>
             </State>
             <State id="lastRainDetected" readonly="true" hidden="true">
                 <ValueType>String</ValueType>

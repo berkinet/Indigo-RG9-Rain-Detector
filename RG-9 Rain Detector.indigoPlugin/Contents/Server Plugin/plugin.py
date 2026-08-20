@@ -38,14 +38,20 @@ class Plugin(indigo.PluginBase):
                 now = datetime.now()
                 with self._lock:
                     for device_id, state in list(self._states.items()):
+                        confirmed = state.confirm_sustained_high(now)
                         ended = state.advance(now)
                         dev = self._devices.get(device_id)
                         if dev is not None:
+                            if confirmed:
+                                self._last_rain_detected[device_id] = now
+                                self.logger.info("Rain confirmed for %s", dev.name)
                             if ended:
-                                self._last_rain_ended[device_id] = state.last_detection
+                                self._last_rain_ended[device_id] = state.rain_ended_at
                                 self.logger.info("Rain ended for %s", dev.name)
                             self._publish(dev, state, now)
-                            self._update_days_since_last_rain(device_id, now)
+                            self._update_days_since_last_rain(
+                                device_id, now, reset=confirmed
+                            )
                 self.sleep(1)
         except self.StopThread:
             pass
@@ -68,7 +74,7 @@ class Plugin(indigo.PluginBase):
                 dev, "daysCounterDay"
             )
             if state.advance(datetime.now()):
-                self._last_rain_ended[dev.id] = state.last_detection
+                self._last_rain_ended[dev.id] = state.rain_ended_at
             self._publish(dev, state, datetime.now(), force=True)
             self._update_days_since_last_rain(dev.id, datetime.now())
 
@@ -86,7 +92,7 @@ class Plugin(indigo.PluginBase):
             return
         before = bool(original_dev.states.get("onOffState", False))
         after = bool(new_dev.states.get("onOffState", False))
-        if before or not after:
+        if before == after:
             return
 
         now = datetime.now()
@@ -96,8 +102,8 @@ class Plugin(indigo.PluginBase):
                 if dev is None or self._source_id(dev) != new_dev.id:
                     continue
                 was_raining = state.is_raining
-                confirmed = state.detection(now)
-                rain_detection = confirmed or was_raining
+                confirmed = state.input_changed(after, now)
+                rain_detection = after and (confirmed or was_raining)
                 if rain_detection:
                     self._last_rain_detected[device_id] = now
                 if confirmed:
@@ -156,12 +162,23 @@ class Plugin(indigo.PluginBase):
             candidate_at = None
             raining_since = None
             last_detection = None
+            candidate_off_at = None
+            high_since = None
+            low_since = None
         else:
             accumulated = self._number_state(dev, "accumulatedSeconds", 0)
             detections = self._number_state(dev, "detectionsToday", 0)
             candidate_at = self._datetime_state(dev, "candidateAt")
             raining_since = self._datetime_state(dev, "rainingSince")
             last_detection = self._datetime_state(dev, "lastDetection")
+            candidate_off_at = self._datetime_state(dev, "candidateOffAt")
+            high_since = self._datetime_state(dev, "highSince")
+            low_since = self._datetime_state(dev, "lowSince")
+        source_high = self._source_is_high(dev)
+        if source_high and high_since is None:
+            high_since = now
+        if not source_high and low_since is None:
+            low_since = last_detection
         return RainState(
             confirmation_seconds=self._setting(dev, "confirmationWindowSeconds", 60),
             dry_seconds=self._setting(dev, "dryPeriodSeconds", 60),
@@ -171,6 +188,10 @@ class Plugin(indigo.PluginBase):
             candidate_at=candidate_at,
             raining_since=raining_since,
             last_detection=last_detection,
+            candidate_off_at=candidate_off_at,
+            source_high=source_high,
+            high_since=high_since,
+            low_since=low_since,
         )
 
     def _publish(self, dev, state, now, force=False):
@@ -195,7 +216,11 @@ class Plugin(indigo.PluginBase):
             "dayKey": state.day_key,
             "accumulatedSeconds": int(state.accumulated_seconds),
             "candidateAt": self._format_datetime(state.candidate_at),
+            "candidateOffAt": self._format_datetime(state.candidate_off_at),
             "rainingSince": self._format_datetime(state.raining_since),
+            "sourceHigh": state.source_high,
+            "highSince": self._format_datetime(state.high_since),
+            "lowSince": self._format_datetime(state.low_since),
             "lastRainDetected": self._format_datetime(
                 self._last_rain_detected.get(dev.id)
             ),
@@ -256,6 +281,13 @@ class Plugin(indigo.PluginBase):
 
     def _source_id(self, dev):
         return self._setting(dev, "sourceDeviceId", 0)
+
+    def _source_is_high(self, dev):
+        try:
+            source = indigo.devices[self._source_id(dev)]
+            return bool(source.states.get("onOffState", False))
+        except (IndexError, KeyError, TypeError, AttributeError):
+            return False
 
     @staticmethod
     def _setting(dev, key, default):
