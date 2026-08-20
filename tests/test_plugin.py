@@ -90,6 +90,31 @@ class PluginTests(unittest.TestCase):
 
         self.assertEqual(state.detections_today, 1)
 
+    def test_textual_source_states_are_treated_as_real_edges(self):
+        source_off = SimpleNamespace(
+            id=924647097, states={"onOffState": "false"}
+        )
+        source_on = SimpleNamespace(
+            id=924647097, states={"onOffState": "true"}
+        )
+        state = self.plugin._states[1]
+
+        self.plugin.deviceUpdated(source_off, source_on)
+        self.plugin.deviceUpdated(source_on, source_off)
+        self.plugin.deviceUpdated(source_off, source_on)
+
+        self.assertEqual(state.detections_today, 2)
+        self.assertTrue(state.is_raining)
+
+    def test_textual_off_state_is_restored_as_low(self):
+        indigo.devices[924647097] = SimpleNamespace(
+            id=924647097, states={"onOffState": "0"}
+        )
+
+        state = self.plugin._restore_state(self.detector)
+
+        self.assertFalse(state.source_high)
+
     def test_unrelated_device_is_ignored(self):
         original = SimpleNamespace(id=2, states={"onOffState": False})
         updated = SimpleNamespace(id=2, states={"onOffState": True})
