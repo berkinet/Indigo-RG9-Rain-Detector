@@ -269,18 +269,14 @@ class Plugin(indigo.PluginBase):
         status = "Raining" if state.is_raining else (
             "Waiting for confirmation" if state.candidate_at else "Dry"
         )
-        last_detection = (
-            state.last_detection.strftime("%Y-%m-%d %H:%M:%S")
-            if state.last_detection else "Never"
-        )
+        last_detection = self._format_datetime(state.last_detection) or "Never"
+        last_rain_ended = self._last_rain_ended.get(dev.id)
         values = {
             "onOffState": state.is_raining,
             "rainfallTodaySeconds": seconds,
             "rainfallToday": format_duration(seconds),
             "lastDetection": last_detection,
-            "lastRainEnded": self._format_datetime(
-                self._last_rain_ended.get(dev.id)
-            ) or "Never",
+            "lastRainEnded": self._format_datetime(last_rain_ended) or "Never",
             "detectionsToday": state.detections_today,
             "status": status,
             "dayKey": state.day_key,
@@ -298,6 +294,14 @@ class Plugin(indigo.PluginBase):
                 self._days_counter_day.get(dev.id)
             ),
         }
+        display_values = {
+            "lastDetection": (
+                self._format_datetime_display(state.last_detection) or "Never"
+            ),
+            "lastRainEnded": (
+                self._format_datetime_display(last_rain_ended) or "Never"
+            ),
+        }
         on_off_changed = (
             force or dev.states.get("onOffState") != state.is_raining
         )
@@ -307,6 +311,8 @@ class Plugin(indigo.PluginBase):
                 update = {"key": key, "value": value}
                 if key == "onOffState":
                     update["uiValue"] = "Raining" if value else "Dry"
+                elif key in display_values:
+                    update["uiValue"] = display_values[key]
                 updates.append(update)
         if updates:
             dev.updateStatesOnServer(updates)
@@ -399,6 +405,10 @@ class Plugin(indigo.PluginBase):
     @staticmethod
     def _format_datetime(value):
         return value.strftime("%Y-%m-%d %H:%M:%S") if value else ""
+
+    @staticmethod
+    def _format_datetime_display(value):
+        return value.strftime("%Y-%m-%d %H:%M") if value else ""
 
     @staticmethod
     def _format_date(value):

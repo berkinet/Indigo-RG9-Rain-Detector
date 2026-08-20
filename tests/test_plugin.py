@@ -243,8 +243,32 @@ class PluginTests(unittest.TestCase):
         self.plugin._publish(self.detector, state, start.replace(minute=2), force=True)
 
         updates = self.detector.updateStatesOnServer.call_args.args[0]
-        values = {item["key"]: item["value"] for item in updates}
+        update_by_key = {item["key"]: item for item in updates}
+        values = {key: item["value"] for key, item in update_by_key.items()}
         self.assertEqual(values["lastRainEnded"], "2026-08-17 10:00:30")
+        self.assertEqual(
+            update_by_key["lastRainEnded"]["uiValue"],
+            "2026-08-17 10:00",
+        )
+
+    def test_timestamp_display_omits_seconds_without_losing_stored_precision(self):
+        state = self.plugin._states[1]
+        state.last_detection = plugin_module.datetime(2026, 8, 20, 14, 2, 5)
+
+        self.plugin._publish(
+            self.detector, state, plugin_module.datetime.now(), force=True
+        )
+
+        updates = {
+            item["key"]: item
+            for item in self.detector.updateStatesOnServer.call_args.args[0]
+        }
+        self.assertEqual(
+            updates["lastDetection"]["value"], "2026-08-20 14:02:05"
+        )
+        self.assertEqual(
+            updates["lastDetection"]["uiValue"], "2026-08-20 14:02"
+        )
 
     def test_on_off_state_has_ui_value_and_matching_icon(self):
         self.detector.updateStatesOnServer.reset_mock()
