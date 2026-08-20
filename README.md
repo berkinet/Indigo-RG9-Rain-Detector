@@ -11,8 +11,9 @@ correctly.
 ## Behaviour
 
 - The first detection starts a confirmation window.
-- A second detection within that window confirms rain. A single input that
-  remains On for the whole confirmation window also confirms rain.
+- A second detection within its configured window confirms rain. Independently,
+  a single input that remains On for the configured minimum duration also
+  confirms rain.
 - Once confirmed, the plugin device remains On until the configured dry period
   has elapsed without another detection.
 - Confirmed rainfall time is measured from the first rising edge through the
@@ -29,7 +30,8 @@ correctly.
 
 Defaults:
 
-- Confirmation window: 60 seconds
+- Second detection window: 60 seconds
+- Minimum continuous detection: 60 seconds
 - Dry period: 60 seconds
 
 All three values are configured on the plugin's **RG-9 rain detector** device.
@@ -55,6 +57,10 @@ For the original installation, select **CM-Rain sensor** (device ID
 - `lastRainEnded`: final drop time of the last completed rain event
 - `detectionsToday`: rising edges received today
 - `status`: `Dry`, `Waiting for confirmation`, or `Raining`
+
+The plugin configuration includes an **Enable debug logging** option. Debug
+logging records source transitions, candidate and confirmation decisions, rain
+ending, and restored timing state without logging every timer cycle.
 
 ## Validation
 

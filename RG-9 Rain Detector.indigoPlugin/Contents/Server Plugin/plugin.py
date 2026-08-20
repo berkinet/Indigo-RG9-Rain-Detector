@@ -24,10 +24,12 @@ class Plugin(indigo.PluginBase):
         self._last_rain_detected = {}
         self._days_counter_day = {}
         self._missing_variable_logged = False
+        self.debug = self._as_bool(plugin_prefs.get("showDebugInfo", False))
 
     def startup(self):
         indigo.devices.subscribeToChanges()
         self.logger.info("RG-9 Rain Detector plugin started")
+        self._debug_log("Debug logging enabled")
 
     def shutdown(self):
         self.logger.info("RG-9 Rain Detector plugin stopped")
@@ -38,6 +40,7 @@ class Plugin(indigo.PluginBase):
                 now = datetime.now()
                 with self._lock:
                     for device_id, state in list(self._states.items()):
+                        candidate_before = state.candidate_at
                         confirmed = state.confirm_sustained_high(now)
                         ended = state.advance(now)
                         dev = self._devices.get(device_id)
@@ -45,9 +48,30 @@ class Plugin(indigo.PluginBase):
                             if confirmed:
                                 self._last_rain_detected[device_id] = now
                                 self.logger.info("Rain confirmed for %s", dev.name)
+                                self._debug_log(
+                                    "%s confirmed by continuous On input after %ss",
+                                    dev.name,
+                                    state.minimum_high_seconds,
+                                )
+                            elif (
+                                candidate_before is not None
+                                and state.candidate_at is None
+                                and not state.is_raining
+                            ):
+                                self._debug_log(
+                                    "%s candidate expired after %ss without a second detection",
+                                    dev.name,
+                                    state.second_detection_seconds,
+                                )
                             if ended:
                                 self._last_rain_ended[device_id] = state.rain_ended_at
                                 self.logger.info("Rain ended for %s", dev.name)
+                                self._debug_log(
+                                    "%s rain ended at %s; today total is %ss",
+                                    dev.name,
+                                    self._format_datetime(state.rain_ended_at),
+                                    state.total_seconds(now),
+                                )
                             self._publish(dev, state, now)
                             self._update_days_since_last_rain(
                                 device_id, now, reset=confirmed
@@ -77,6 +101,15 @@ class Plugin(indigo.PluginBase):
                 self._last_rain_ended[dev.id] = state.rain_ended_at
             self._publish(dev, state, datetime.now(), force=True)
             self._update_days_since_last_rain(dev.id, datetime.now())
+            self._debug_log(
+                "%s restored: source=%s, status=%s, second-window=%ss, minimum-On=%ss, dry=%ss",
+                dev.name,
+                "On" if state.source_high else "Off",
+                "Raining" if state.is_raining else "Dry",
+                state.second_detection_seconds,
+                state.minimum_high_seconds,
+                state.dry_seconds,
+            )
 
     def deviceStopComm(self, dev):
         with self._lock:
@@ -102,12 +135,32 @@ class Plugin(indigo.PluginBase):
                 if dev is None or self._source_id(dev) != new_dev.id:
                     continue
                 was_raining = state.is_raining
+                candidate_before = state.candidate_at
+                self._debug_log(
+                    "%s source changed %s -> %s",
+                    dev.name,
+                    "On" if before else "Off",
+                    "On" if after else "Off",
+                )
                 confirmed = state.input_changed(after, now)
                 rain_detection = after and (confirmed or was_raining)
                 if rain_detection:
                     self._last_rain_detected[device_id] = now
                 if confirmed:
                     self.logger.info("Rain confirmed for %s", dev.name)
+                    reason = "continuous On input" if not after else "second detection"
+                    self._debug_log("%s confirmed by %s", dev.name, reason)
+                elif (
+                    after
+                    and candidate_before is None
+                    and state.candidate_at is not None
+                ):
+                    self._debug_log(
+                        "%s candidate started; waiting up to %ss for a second detection or %ss continuous On",
+                        dev.name,
+                        state.second_detection_seconds,
+                        state.minimum_high_seconds,
+                    )
                 self._publish(dev, state, now, force=True)
                 self._update_days_since_last_rain(
                     device_id, now, reset=rain_detection
@@ -116,7 +169,8 @@ class Plugin(indigo.PluginBase):
     def validateDeviceConfigUi(self, values_dict, type_id, dev_id):
         errors = indigo.Dict()
         for key, label, minimum, maximum in (
-            ("confirmationWindowSeconds", "Confirmation window", 1, 3600),
+            ("secondDetectionWindowSeconds", "Second detection window", 1, 3600),
+            ("minimumDetectionDurationSeconds", "Minimum continuous detection", 1, 3600),
             ("dryPeriodSeconds", "Dry period", 1, 86400),
         ):
             try:
@@ -139,6 +193,13 @@ class Plugin(indigo.PluginBase):
             errors["showAlertText"] = "Please correct the highlighted settings."
             return False, values_dict, errors
         return True, values_dict
+
+    def closedPrefsConfigUi(self, values_dict, user_cancelled):
+        if not user_cancelled:
+            self.debug = self._as_bool(values_dict.get("showDebugInfo", False))
+            self.logger.info(
+                "Debug logging %s", "enabled" if self.debug else "disabled"
+            )
 
     def availableSourceDevices(self, filter="", valuesDict=None, typeId="", targetId=0):
         available = []
@@ -180,7 +241,16 @@ class Plugin(indigo.PluginBase):
         if not source_high and low_since is None:
             low_since = last_detection
         return RainState(
-            confirmation_seconds=self._setting(dev, "confirmationWindowSeconds", 60),
+            second_detection_seconds=self._setting(
+                dev,
+                "secondDetectionWindowSeconds",
+                self._setting(dev, "confirmationWindowSeconds", 60),
+            ),
+            minimum_high_seconds=self._setting(
+                dev,
+                "minimumDetectionDurationSeconds",
+                self._setting(dev, "confirmationWindowSeconds", 60),
+            ),
             dry_seconds=self._setting(dev, "dryPeriodSeconds", 60),
             day_key=day_key,
             accumulated_seconds=accumulated,
@@ -231,9 +301,19 @@ class Plugin(indigo.PluginBase):
         updates = []
         for key, value in values.items():
             if force or dev.states.get(key) != value:
-                updates.append({"key": key, "value": value})
+                update = {"key": key, "value": value}
+                if key == "onOffState":
+                    update["uiValue"] = "Raining" if value else "Dry"
+                updates.append(update)
         if updates:
             dev.updateStatesOnServer(updates)
+        if force or dev.states.get("onOffState") != state.is_raining:
+            image = (
+                indigo.kStateImageSel.SensorOn
+                if state.is_raining
+                else indigo.kStateImageSel.SensorOff
+            )
+            dev.updateStateImageOnServer(image)
 
     def _update_days_since_last_rain(self, device_id, now, reset=False):
         try:
@@ -288,6 +368,16 @@ class Plugin(indigo.PluginBase):
             return bool(source.states.get("onOffState", False))
         except (IndexError, KeyError, TypeError, AttributeError):
             return False
+
+    def _debug_log(self, message, *args):
+        if self.debug:
+            self.logger.info("Debug: " + message, *args)
+
+    @staticmethod
+    def _as_bool(value):
+        return value is True or str(value).strip().lower() in (
+            "1", "true", "yes", "on"
+        )
 
     @staticmethod
     def _setting(dev, key, default):

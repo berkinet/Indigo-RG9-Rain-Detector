@@ -8,7 +8,8 @@ from datetime import datetime, timedelta
 
 @dataclass
 class RainState:
-    confirmation_seconds: int = 60
+    second_detection_seconds: int = 60
+    minimum_high_seconds: int = 60
     dry_seconds: int = 60
     day_key: str = ""
     accumulated_seconds: float = 0.0
@@ -37,7 +38,8 @@ class RainState:
 
         if (
             self.candidate_at is None
-            or (now - self.candidate_at).total_seconds() > self.confirmation_seconds
+            or (now - self.candidate_at).total_seconds()
+            > self.second_detection_seconds
         ):
             self.candidate_at = now
             self.candidate_off_at = now
@@ -87,7 +89,7 @@ class RainState:
             or not self.source_high
             or self.candidate_at is None
             or self.high_since is None
-            or (now - self.high_since).total_seconds() < self.confirmation_seconds
+            or (now - self.high_since).total_seconds() < self.minimum_high_seconds
         ):
             return False
         self.raining_since = self.candidate_at
@@ -103,7 +105,7 @@ class RainState:
             and self.candidate_at is not None
             and not self.source_high
             and (now - self.candidate_at).total_seconds()
-            > self.confirmation_seconds
+            > self.second_detection_seconds
         ):
             self.candidate_at = None
             self.candidate_off_at = None
