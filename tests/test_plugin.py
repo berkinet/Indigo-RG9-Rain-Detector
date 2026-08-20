@@ -56,6 +56,7 @@ spec.loader.exec_module(plugin_module)
 
 class PluginTests(unittest.TestCase):
     def setUp(self):
+        indigo.devices.clear()
         indigo.variables.clear()
         indigo.variables[1208422529] = SimpleNamespace(
             id=1208422529, value="0"
@@ -152,9 +153,21 @@ class PluginTests(unittest.TestCase):
         source_on = SimpleNamespace(id=924647097, states={"onOffState": True})
 
         self.plugin.deviceUpdated(source_off, source_on)
+        self.plugin.deviceUpdated(source_on, source_off)
         self.plugin.deviceUpdated(source_off, source_on)
 
         indigo.variable.updateValue.assert_called_with(1208422529, value="0")
+
+    def test_falling_edge_is_recorded_as_end_of_rainfall(self):
+        source_off = SimpleNamespace(id=924647097, states={"onOffState": False})
+        source_on = SimpleNamespace(id=924647097, states={"onOffState": True})
+        state = self.plugin._states[1]
+
+        self.plugin.deviceUpdated(source_off, source_on)
+        self.plugin.deviceUpdated(source_on, source_off)
+
+        self.assertFalse(state.source_high)
+        self.assertIsNotNone(state.low_since)
 
     def test_day_with_rain_does_not_increment_at_midnight(self):
         variable = SimpleNamespace(id=1208422529, value="0")

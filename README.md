@@ -5,17 +5,19 @@ An Indigo plugin that turns short Hydreon RG-9 detections into a reliable
 
 The RG-9 is connected through a Phidgets digital input represented by an
 Indigo device. Each rising edge of that device's `onOffState` is treated as one
-detection.
+detection, while the full On/Off level is retained so long pulses are handled
+correctly.
 
 ## Behaviour
 
 - The first detection starts a confirmation window.
-- A second detection within that window confirms rain.
+- A second detection within that window confirms rain. A single input that
+  remains On for the whole confirmation window also confirms rain.
 - Once confirmed, the plugin device remains On until the configured dry period
   has elapsed without another detection.
-- Confirmed rainfall time is measured from the first detection through the last
-  detection. The dry period delays switching the detector Off, but is not added
-  to rainfall time.
+- Confirmed rainfall time is measured from the first rising edge through the
+  final falling edge. The dry period delays switching the detector Off, but is
+  not added to rainfall time.
 - Rainfall time and detection count reset at local midnight. An event spanning
   midnight remains On, while the new day's duration starts from midnight.
 - `lastRainEnded` records the final drop time for the most recently completed
