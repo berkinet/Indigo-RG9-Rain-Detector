@@ -46,6 +46,7 @@ indigo.Dict = dict
 indigo.devices = Devices()
 indigo.variables = Variables()
 indigo.variable = SimpleNamespace(updateValue=Mock())
+indigo.kStateImageSel = SimpleNamespace(SensorOn="sensor-on", SensorOff="sensor-off")
 sys.modules["indigo"] = indigo
 
 spec = importlib.util.spec_from_file_location("rg9_plugin", SERVER / "plugin.py")
@@ -69,11 +70,13 @@ class PluginTests(unittest.TestCase):
             deviceTypeId="rainDetector",
             pluginProps={
                 "sourceDeviceId": "924647097",
-                "confirmationWindowSeconds": "60",
+                "secondDetectionWindowSeconds": "60",
+                "minimumDetectionDurationSeconds": "60",
                 "dryPeriodSeconds": "60",
             },
             states={},
             updateStatesOnServer=Mock(),
+            updateStateImageOnServer=Mock(),
         )
         self.plugin.deviceStartComm(self.detector)
 
@@ -98,14 +101,33 @@ class PluginTests(unittest.TestCase):
         valid, values = self.plugin.validateDeviceConfigUi(
             {
                 "sourceDeviceId": "924647097",
-                "confirmationWindowSeconds": "30",
+                "secondDetectionWindowSeconds": "30",
+                "minimumDetectionDurationSeconds": "15",
                 "dryPeriodSeconds": "60",
             },
             "rainDetector",
             0,
         )
         self.assertTrue(valid)
-        self.assertEqual(values["confirmationWindowSeconds"], "30")
+        self.assertEqual(values["secondDetectionWindowSeconds"], "30")
+        self.assertEqual(values["minimumDetectionDurationSeconds"], "15")
+
+    def test_old_confirmation_setting_is_used_for_both_new_timers(self):
+        self.detector.pluginProps = {
+            "sourceDeviceId": "924647097",
+            "confirmationWindowSeconds": "45",
+            "dryPeriodSeconds": "60",
+        }
+        state = self.plugin._restore_state(self.detector)
+        self.assertEqual(state.second_detection_seconds, 45)
+        self.assertEqual(state.minimum_high_seconds, 45)
+
+    def test_plugin_config_controls_debug_logging(self):
+        self.assertFalse(self.plugin.debug)
+        self.plugin.closedPrefsConfigUi({"showDebugInfo": True}, False)
+        self.assertTrue(self.plugin.debug)
+        self.plugin.closedPrefsConfigUi({"showDebugInfo": False}, True)
+        self.assertTrue(self.plugin.debug)
 
     def test_source_menu_only_includes_devices_with_on_off_state(self):
         indigo.devices.clear()
@@ -223,6 +245,20 @@ class PluginTests(unittest.TestCase):
         updates = self.detector.updateStatesOnServer.call_args.args[0]
         values = {item["key"]: item["value"] for item in updates}
         self.assertEqual(values["lastRainEnded"], "2026-08-17 10:00:30")
+
+    def test_on_off_state_has_ui_value_and_matching_icon(self):
+        self.detector.updateStatesOnServer.reset_mock()
+        self.detector.updateStateImageOnServer.reset_mock()
+        state = self.plugin._states[1]
+
+        self.plugin._publish(
+            self.detector, state, plugin_module.datetime.now(), force=True
+        )
+
+        updates = self.detector.updateStatesOnServer.call_args.args[0]
+        on_off = next(item for item in updates if item["key"] == "onOffState")
+        self.assertEqual(on_off["uiValue"], "Dry")
+        self.detector.updateStateImageOnServer.assert_called_once_with("sensor-off")
 
 
 if __name__ == "__main__":

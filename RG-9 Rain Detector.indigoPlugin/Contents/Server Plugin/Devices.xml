@@ -7,8 +7,11 @@
                 <Label>Indigo device to monitor:</Label>
                 <List class="self" method="availableSourceDevices" dynamicReload="true"/>
             </Field>
-            <Field id="confirmationWindowSeconds" type="textfield" defaultValue="60">
+            <Field id="secondDetectionWindowSeconds" type="textfield" defaultValue="60">
                 <Label>Second detection required within (seconds):</Label>
+            </Field>
+            <Field id="minimumDetectionDurationSeconds" type="textfield" defaultValue="60">
+                <Label>Confirm after continuously On for (seconds):</Label>
             </Field>
             <Field id="dryPeriodSeconds" type="textfield" defaultValue="60">
                 <Label>End rain after no detections for (seconds):</Label>
@@ -101,5 +104,6 @@
                 <ControlPageLabel>Days counter update date</ControlPageLabel>
             </State>
         </States>
+        <UiDisplayStateId>onOffState</UiDisplayStateId>
     </Device>
 </Devices>

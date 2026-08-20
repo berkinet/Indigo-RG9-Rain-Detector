@@ -16,7 +16,11 @@ spec.loader.exec_module(rain_logic)
 class RainStateTests(unittest.TestCase):
     def setUp(self):
         self.start = datetime(2026, 8, 17, 10, 0, 0)
-        self.state = rain_logic.RainState(confirmation_seconds=30, dry_seconds=60)
+        self.state = rain_logic.RainState(
+            second_detection_seconds=30,
+            minimum_high_seconds=30,
+            dry_seconds=60,
+        )
 
     def test_isolated_detection_does_not_confirm_rain(self):
         self.assertFalse(self.state.detection(self.start))
@@ -74,6 +78,28 @@ class RainStateTests(unittest.TestCase):
         )
         self.assertEqual(self.state.detections_today, 2)
         self.assertEqual(self.state.raining_since, self.start)
+
+    def test_second_detection_and_continuous_high_use_independent_timers(self):
+        state = rain_logic.RainState(
+            second_detection_seconds=60,
+            minimum_high_seconds=10,
+            dry_seconds=60,
+        )
+        state.input_changed(True, self.start)
+        self.assertTrue(
+            state.confirm_sustained_high(self.start + timedelta(seconds=10))
+        )
+
+        pulse_state = rain_logic.RainState(
+            second_detection_seconds=60,
+            minimum_high_seconds=120,
+            dry_seconds=60,
+        )
+        pulse_state.input_changed(True, self.start)
+        pulse_state.input_changed(False, self.start + timedelta(seconds=2))
+        self.assertTrue(
+            pulse_state.input_changed(True, self.start + timedelta(seconds=50))
+        )
 
     def test_daily_total_resets_at_midnight_during_rain(self):
         start = datetime(2026, 8, 17, 23, 59, 30)
