@@ -260,6 +260,24 @@ class PluginTests(unittest.TestCase):
         self.assertEqual(on_off["uiValue"], "Dry")
         self.detector.updateStateImageOnServer.assert_called_once_with("sensor-off")
 
+    def test_icon_updates_when_indigo_immediately_caches_new_state(self):
+        state = self.plugin._states[1]
+        self.detector.states["onOffState"] = True
+        self.detector.updateStateImageOnServer.reset_mock()
+
+        def cache_updates(updates):
+            for update in updates:
+                self.detector.states[update["key"]] = update["value"]
+
+        self.detector.updateStatesOnServer.side_effect = cache_updates
+
+        self.plugin._publish(
+            self.detector, state, plugin_module.datetime.now()
+        )
+
+        self.assertFalse(self.detector.states["onOffState"])
+        self.detector.updateStateImageOnServer.assert_called_once_with("sensor-off")
+
 
 if __name__ == "__main__":
     unittest.main()
