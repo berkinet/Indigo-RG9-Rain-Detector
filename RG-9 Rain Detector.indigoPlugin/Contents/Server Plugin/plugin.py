@@ -123,8 +123,12 @@ class Plugin(indigo.PluginBase):
     def deviceUpdated(self, original_dev, new_dev):
         if original_dev.id not in self._source_ids():
             return
-        before = bool(original_dev.states.get("onOffState", False))
-        after = bool(new_dev.states.get("onOffState", False))
+        # Indigo normally supplies a bool here, but some source plugins expose
+        # their On/Off state as 0/1 or as text.  bool("false") is True in
+        # Python, which would make both edges look permanently high and cause
+        # us to ignore all subsequent updates.
+        before = self._state_is_on(original_dev.states.get("onOffState", False))
+        after = self._state_is_on(new_dev.states.get("onOffState", False))
         if before == after:
             return
 
@@ -374,7 +378,7 @@ class Plugin(indigo.PluginBase):
     def _source_is_high(self, dev):
         try:
             source = indigo.devices[self._source_id(dev)]
-            return bool(source.states.get("onOffState", False))
+            return self._state_is_on(source.states.get("onOffState", False))
         except (IndexError, KeyError, TypeError, AttributeError):
             return False
 
@@ -387,6 +391,13 @@ class Plugin(indigo.PluginBase):
         return value is True or str(value).strip().lower() in (
             "1", "true", "yes", "on"
         )
+
+    @staticmethod
+    def _state_is_on(value):
+        """Normalize bool, numeric, and textual Indigo On/Off states."""
+        if isinstance(value, str):
+            return value.strip().lower() in ("1", "true", "yes", "on")
+        return bool(value)
 
     @staticmethod
     def _setting(dev, key, default):
