@@ -298,6 +298,9 @@ class Plugin(indigo.PluginBase):
                 self._days_counter_day.get(dev.id)
             ),
         }
+        on_off_changed = (
+            force or dev.states.get("onOffState") != state.is_raining
+        )
         updates = []
         for key, value in values.items():
             if force or dev.states.get(key) != value:
@@ -307,7 +310,7 @@ class Plugin(indigo.PluginBase):
                 updates.append(update)
         if updates:
             dev.updateStatesOnServer(updates)
-        if force or dev.states.get("onOffState") != state.is_raining:
+        if on_off_changed:
             image = (
                 indigo.kStateImageSel.SensorOn
                 if state.is_raining
