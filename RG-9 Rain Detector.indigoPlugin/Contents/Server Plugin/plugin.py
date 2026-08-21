@@ -40,10 +40,24 @@ class Plugin(indigo.PluginBase):
                 now = datetime.now()
                 with self._lock:
                     for device_id, state in list(self._states.items()):
+                        dev = self._devices.get(device_id)
+                        if dev is not None:
+                            # Some third-party Indigo devices update their
+                            # states without producing a usable cross-plugin
+                            # deviceUpdated notification. Reconcile the live
+                            # state as a fallback; input_changed ignores levels
+                            # already handled by the callback.
+                            self._sync_source_level(
+                                device_id,
+                                dev,
+                                state,
+                                self._source_is_high(dev),
+                                now,
+                                origin="poll",
+                            )
                         candidate_before = state.candidate_at
                         confirmed = state.confirm_sustained_high(now)
                         ended = state.advance(now)
-                        dev = self._devices.get(device_id)
                         if dev is not None:
                             if confirmed:
                                 self._last_rain_detected[device_id] = now
@@ -138,37 +152,46 @@ class Plugin(indigo.PluginBase):
                 dev = self._devices.get(device_id)
                 if dev is None or self._source_id(dev) != new_dev.id:
                     continue
-                was_raining = state.is_raining
-                candidate_before = state.candidate_at
-                self._debug_log(
-                    "%s source changed %s -> %s",
-                    dev.name,
-                    "On" if before else "Off",
-                    "On" if after else "Off",
+                self._sync_source_level(
+                    device_id, dev, state, after, now, origin="callback"
                 )
-                confirmed = state.input_changed(after, now)
-                rain_detection = after and (confirmed or was_raining)
-                if rain_detection:
-                    self._last_rain_detected[device_id] = now
-                if confirmed:
-                    self.logger.info("Rain confirmed for %s", dev.name)
-                    reason = "continuous On input" if not after else "second detection"
-                    self._debug_log("%s confirmed by %s", dev.name, reason)
-                elif (
-                    after
-                    and candidate_before is None
-                    and state.candidate_at is not None
-                ):
-                    self._debug_log(
-                        "%s candidate started; waiting up to %ss for a second detection or %ss continuous On",
-                        dev.name,
-                        state.second_detection_seconds,
-                        state.minimum_high_seconds,
-                    )
-                self._publish(dev, state, now, force=True)
-                self._update_days_since_last_rain(
-                    device_id, now, reset=rain_detection
-                )
+
+    def _sync_source_level(self, device_id, dev, state, is_high, now, origin):
+        """Apply a live source level received by callback or fallback poll."""
+        if is_high == state.source_high:
+            return False
+        was_raining = state.is_raining
+        candidate_before = state.candidate_at
+        self._debug_log(
+            "%s source changed %s -> %s (%s)",
+            dev.name,
+            "On" if state.source_high else "Off",
+            "On" if is_high else "Off",
+            origin,
+        )
+        confirmed = state.input_changed(is_high, now)
+        rain_detection = is_high and (confirmed or was_raining)
+        if rain_detection:
+            self._last_rain_detected[device_id] = now
+        if confirmed:
+            self.logger.info("Rain confirmed for %s", dev.name)
+            self._debug_log("%s confirmed by second detection", dev.name)
+        elif (
+            is_high
+            and candidate_before is None
+            and state.candidate_at is not None
+        ):
+            self._debug_log(
+                "%s candidate started; waiting up to %ss for a second detection or %ss continuous On",
+                dev.name,
+                state.second_detection_seconds,
+                state.minimum_high_seconds,
+            )
+        self._publish(dev, state, now, force=True)
+        self._update_days_since_last_rain(
+            device_id, now, reset=rain_detection
+        )
+        return confirmed
 
     def validateDeviceConfigUi(self, values_dict, type_id, dev_id):
         errors = indigo.Dict()
