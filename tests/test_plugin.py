@@ -115,6 +115,33 @@ class PluginTests(unittest.TestCase):
 
         self.assertFalse(state.source_high)
 
+    def test_polling_detects_phidgets_textual_state_changes(self):
+        source = SimpleNamespace(
+            id=924647097,
+            pluginId="com.yikes.eric.phidgets-indigo",
+            deviceTypeId="digitalInput",
+            supportsOnState=False,
+            states={"onOffState": "off", "lastUpdate": "2026-08-21 10:58:12"},
+        )
+        indigo.devices[source.id] = source
+        state = self.plugin._states[1]
+        now = plugin_module.datetime(2026, 8, 21, 11, 0, 0)
+
+        source.states["onOffState"] = "on"
+        self.plugin._sync_source_level(
+            1, self.detector, state, self.plugin._source_is_high(self.detector),
+            now, origin="poll"
+        )
+        source.states["onOffState"] = "off"
+        self.plugin._sync_source_level(
+            1, self.detector, state, self.plugin._source_is_high(self.detector),
+            now + plugin_module.timedelta(seconds=2), origin="poll"
+        )
+
+        self.assertEqual(state.detections_today, 1)
+        self.assertFalse(state.source_high)
+        self.assertIsNotNone(state.low_since)
+
     def test_unrelated_device_is_ignored(self):
         original = SimpleNamespace(id=2, states={"onOffState": False})
         updated = SimpleNamespace(id=2, states={"onOffState": True})
